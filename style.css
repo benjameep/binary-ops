@@ -1,0 +1,29 @@
+body {
+  margin:0px;
+  padding:0px;
+}
+svg {
+  display:block;
+  margin:100px auto;
+}
+text {
+  font-weight: 300;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serf;
+  text-anchor: middle;
+  dominant-baseline:middle;
+  user-select: none;
+}
+.nodes text { fill:black; font-size:25px; }
+.nodes circle { fill:#CCC; }
+.nodes .on text { fill:white; }
+.nodes .on circle { fill:#333; }
+
+.labels text { 
+  fill:#AAA; 
+  font-size:40px; 
+  font-family: 'Courier New', Courier, monospace;
+}
+.hex { text-anchor: end; }
+
+.labels circle { fill:none; }
+.labels .btn:hover circle {fill:#EEE; }
