@@ -20,10 +20,14 @@ text {
 
 .labels text { 
   fill:#AAA; 
-  font-size:40px; 
+  font-size:40px;
   font-family: 'Courier New', Courier, monospace;
 }
 .hex { text-anchor: end; }
 
 .labels circle { fill:none; }
 .labels .btn:hover circle {fill:#EEE; }
+
+#temp {
+  /* visibility: hidden; */
+}

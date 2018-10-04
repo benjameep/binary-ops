@@ -1,36 +1,23 @@
 const svg = d3.select('svg')
-const $nodes = svg.append('g').classed('nodes',true)
+const clip = svg.append('clipPath').attr('id','clip').append('rect')
+const $nodes = svg.append('g').classed('nodes',true).attr('clip-path','url(#clip)')
 const $labels = svg.append('g').classed('labels',true)
+const $hover = svg.append('g').classed('hover',true)
 
-const margin = {left:120,right:0}
 const blocksize = 60
-
-class Bit {
-  constructor(r=0,c=0,val=Math.floor(Math.random()*2)){
-    this._value = (Number(val)||0)%2
-    this._r = r
-    this._c = c
-  }
-  get r(){ return this._r }
-  get c(){ return this._c }
-  flip(){
-    this._value = +!this._value
-    return this._value
-  }
-  get(){ return this._value }
-  set(val){ 
-    var temp = this._value
-    this._value = (Number(val)||0)%2 
-    return temp
-  }
-  toString(){ return this._value }
-}
+const margin = 100
+const btns = ['!','~','<<','>>','+','&','|','^']
+const numnodes = 8
+const rows = Array(2).fill().map((_,r) => Array(numnodes).fill().map((_,c) => new Bit(r*numnodes+c,r,c)))
+const nodes = [].concat(...rows)
 
 const x = scale()
   .bandwidth(blocksize)
   .paddingInner(3)
   .paddingOuter(20)
-  .anchor(margin.left)
+  .anchor(0)
+  .align(0.5)
+  .count(numnodes)
   
 const y = scale()
   .bandwidth(blocksize)
@@ -42,6 +29,8 @@ const btnx = scale()
   .bandwidth(blocksize)
   .paddingInner(3)
   .align(0.5)
+  .anchor(x.min()+x.size()/2)
+  .count(btns.length)
 
 const btny = scale()
   .bandwidth(blocksize)
@@ -50,23 +39,68 @@ const btny = scale()
   .align(0.5)
   .count(2)
 
-const btns = ['!','~','<<','>>','+','&','|','^']
-const numnodes = 8
-x.count(numnodes)
-btnx.anchor(x.min()+x.size()/2)
-btnx.count(btns.length)
-const rows = Array(2).fill().map((_,r) => Array(numnodes).fill().map((_,c) => new Bit(r,c,0)))
-const nodes = [].concat(...rows)
+const transform = d3.transform()
+  .translate(d => [x(d.c)+x.bandwidth()/2,y(d.r)+y.bandwidth()/2])
 
 /* Adjust the container dimensions */
-svg.attr('viewBox',[0,btny.min(),margin.left+x.size()+margin.right,btny.size()].join(' '))
+svg.attr('viewBox',[x.min()-margin,btny.min(),x.size()+margin*2,btny.size()].join(' '))
   .attr('width',700)
   .attr('height',btny.size())
 
+clip
+  .attr('x',x.min()+x.paddingOuter())
+  .attr('y',y.min())
+  .attr('width',x.size()-x.paddingOuter()*2)
+  .attr('height',y.size())
+
+function animateflip(selection,cb=()=>{}){
+  selection.filter(function(d){
+    return d3.select(this).classed('on') != d.get()
+  }).transition()
+    .duration(100)
+    .attr('transform',d3.transform(transform).scale(1,0))
+    .on('end',cb)
+  .transition()
+    .duration(100)
+    .attr('transform',transform)
+}
+
+function animateShift(selection,shift,cb){
+  tempnode.c = shift == -1 ? numnodes : -1
+  tempnode.r = selection.datum().r
+  d3.select('#temp')
+    .attr('visibility','visible')
+    .attr('transform',transform)
+
+  selection.transition()
+    .attr('transform',d3.transform(transform).translate(shift*(x.bandwidth()+x.paddingInner()),0))
+    .on('end',() => {
+      d3.select('#temp').attr('visibility','hidden')
+      cb()
+    })
+  .transition()
+    .duration(0)
+    .attr('transform',transform)
+}
+
+function animateReplace(selection,cb){
+  const _hover = $hover.selectAll('use').data(selection.data())
+  _hover.exit().remove()
+  _hover.enter().append('use')
+    .merge(_hover)
+    .attr('href',d => '#'+d.id)
+  .transition()
+    .attr('transform',d3.transform().translate(d => [0,-1*(d.r*2-1)*(y.paddingInner()+y.bandwidth())]))
+    .on('end',cb)
+    .remove()
+}
+
 /* Nodes */
-$nodes.selectAll('g').data(nodes)
+const tempnode = new Bit('temp',0,)
+$nodes.selectAll('g').data(nodes.concat(tempnode))
   .enter().append('g')
-  .attr('transform',d => `translate(${[x(d.c)+x.bandwidth()/2,y(d.r)+y.bandwidth()/2]})`)
+  .attr('visibility', d => d.id!='temp' ? 'visible' : 'hidden')
+  .attr('id',d => d.id)
   .each(function(){
     var g = d3.select(this)
     g.append('circle')
@@ -74,7 +108,13 @@ $nodes.selectAll('g').data(nodes)
     g.append('text')
       .text(d => d.get())
   })
-  .on('click',bit => {bit.flip(); update()})
+  .filter(d => d.id != 'temp')
+  .attr('data-row',d => d.r)
+  .attr('transform',transform)
+  .on('click',function(bit){
+    bit.flip()
+    d3.select(this).call(animateflip,update) 
+  })
   
 /* Hex Labels */
 $labels.selectAll('.hex').data(rows)
@@ -118,37 +158,46 @@ function add1(row){
 }
 
 function operation(op,r){
+  var $row = d3.selectAll(`[data-row="${r}"],#temp`)
   var row = rows[r]
+  var $other = d3.selectAll(`[data-row="${(r+1)%2}"],#temp`)
   var other = rows[(r+1)%2]
 
   switch(op){
   case '&':
     row.forEach((bit,i) => bit.set(bit.get() & other[i].get()))
+    $other.filter(d => !d.get()).call(animateReplace,update)
     break;
   case '|':
     row.forEach((bit,i) => bit.set(bit.get() | other[i].get()))
+    $other.filter(d => d.get()).call(animateReplace,update)
     break;
   case '^':
     row.forEach((bit,i) => bit.set(bit.get() ^ other[i].get()))
+    $other.filter(d => d.get()).call(animateReplace,() => $row.call(animateflip,update))
     break;
   case '!':
     row.forEach(bit => bit.flip())
+    $row.call(animateflip,update)
     break;
   case '~':
     row.forEach(bit => bit.flip())
     add1(row)
+    $row.call(animateflip,update)
     break;
   case '<<':
     row.reduceRight((carry,bit) => bit.set(carry),0)
+    $row.call(animateShift,-1,update)
     break;
   case '>>':
     row.reduce((carry,bit) => bit.set(carry),0)
+    $row.call(animateShift,1,update)
     break;
   case '+':
     add1(row)
+    $row.call(animateflip,update)
     break;
   }
-  update()
 }
 
 update()
