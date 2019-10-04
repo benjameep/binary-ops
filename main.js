@@ -6,7 +6,7 @@ const $hover = svg.append('g').classed('hover',true)
 
 const blocksize = 60
 const margin = 100
-const btns = ['~','-','<<','>>','+','&','|','^']
+const btns = ['~','-','<<','>>','+','&','|','^','0']
 const numnodes = 8
 const rows = Array(2).fill().map((_,r) => Array(numnodes).fill().map((_,c) => new Bit(r*numnodes+c,r,c)))
 const nodes = [].concat(...rows)
@@ -195,6 +195,10 @@ function operation(op,r){
     break;
   case '+':
     add1(row)
+    $row.call(animateflip,update)
+    break;
+  case '0':
+    row.forEach(bit => bit.set(0))
     $row.call(animateflip,update)
     break;
   }
